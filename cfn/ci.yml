@@ -1,0 +1,323 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  CodeBuildProjectNameLambda:
+    Type: String
+    Default: 'gomashio-lambda'
+  CodeBuildProjectNameCFn:
+    Type: String
+    Default: 'gomashio-cfn'
+  FunctionStackName:
+    Type: String
+    Default: 'gomashio'
+Resources:
+  S3BucketCodePipelineSource:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      AccessControl: 'Private'
+      VersioningConfiguration:
+        Status: 'Enabled'
+
+  S3BucketCodePipelineArtifact:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      AccessControl: 'Private'
+      VersioningConfiguration:
+        Status: 'Enabled'
+
+  S3BucketCodeBuildArtifact:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      AccessControl: 'Private'
+      VersioningConfiguration:
+        Status: 'Enabled'
+
+  IAMUserCI:
+    Type: 'AWS::IAM::User'
+    Properties:
+      Policies:
+        - PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action: 's3:PutObject'
+                Resource: !Sub arn:aws:s3:::${S3BucketCodePipelineSource}/*
+          PolicyName: 'deploy'
+
+  # https://docs.aws.amazon.com/ja_jp/codebuild/latest/userguide/setting-up.html
+  IAMRoleCodeBuild:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'codebuild.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action: 's3:PutObject'
+                Resource: !Sub arn:aws:s3:::${S3BucketCodePipelineArtifact}/*
+              - Effect: 'Allow'
+                Action:
+                  - 's3:GetObject'
+                  - 's3:GetObjectVersion'
+                Resource:
+                  - !Sub arn:aws:s3:::${S3BucketCodePipelineArtifact}/*
+          PolicyName: 'codebuild-s3'
+        - PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
+          PolicyName: 'codebuild-cloudwatch-logs'
+
+  # https://docs.aws.amazon.com/ja_jp/codepipeline/latest/userguide/how-to-custom-role.html
+  IAMRoleCodePipeline:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'codepipeline.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action: 's3:PutObject'
+                Resource: !Sub arn:aws:s3:::${S3BucketCodePipelineArtifact}/*
+              - Effect: 'Allow'
+                Action:
+                  - 's3:GetObject'
+                  - 's3:GetObjectVersion'
+                  - 's3:GetBucketVersioning'
+                Resource:
+                  - !Sub arn:aws:s3:::${S3BucketCodePipelineSource}
+                  - !Sub arn:aws:s3:::${S3BucketCodePipelineSource}/*
+                  - !Sub arn:aws:s3:::${S3BucketCodePipelineArtifact}
+                  - !Sub arn:aws:s3:::${S3BucketCodePipelineArtifact}/*
+          PolicyName: 'codepipeline-s3'
+        - PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 'codebuild:BatchGetBuilds'
+                  - 'codebuild:StartBuild'
+                Resource:
+                  - !GetAtt CodeBuildProjectLambda.Arn
+                  - !GetAtt CodeBuildProjectCFn.Arn
+          PolicyName: 'codepipeline-codebuild'
+        - PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 'cloudformation:CreateStack'
+                  - 'cloudformation:DeleteStack'
+                  - 'cloudformation:DescribeStacks'
+                  - 'cloudformation:UpdateStack'
+                  - 'cloudformation:CreateChangeSet'
+                  - 'cloudformation:DeleteChangeSet'
+                  - 'cloudformation:DescribeChangeSet'
+                  - 'cloudformation:ExecuteChangeSet'
+                  - 'cloudformation:SetStackPolicy'
+                  - 'cloudformation:ValidateTemplate'
+                Resource: '*'
+              - Effect: 'Allow'
+                Action:
+                  - 'iam:PassRole'
+                Resource: !GetAtt IAMRoleCloudFormation.Arn
+          PolicyName: 'codepipeline-cloudformation'
+  IAMRoleCloudFormation:
+    DeletionPolicy: 'Retain'
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'cloudformation.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AdministratorAccess'
+
+  # [NOTE] Stages
+  # https://docs.aws.amazon.com/ja_jp/codepipeline/latest/userguide/reference-pipeline-structure.html#action-requirements
+  CodePipelinePipeline:
+    Type: 'AWS::CodePipeline::Pipeline'
+    Properties:
+      ArtifactStore:
+        Location: !Ref S3BucketCodePipelineArtifact
+        Type: 'S3'
+      RestartExecutionOnUpdate: false
+      RoleArn: !GetAtt IAMRoleCodePipeline.Arn
+      Stages:
+        - Name: 'Source'
+          Actions:
+            -
+              Name: 'SourceAction'
+              ActionTypeId:
+                Category: 'Source'
+                Owner: 'AWS'
+                Provider: 'S3'
+                Version: '1'
+              OutputArtifacts:
+                -
+                  Name: 'SourceOutput'
+              Configuration:
+                S3Bucket: !Ref S3BucketCodePipelineSource
+                S3ObjectKey: 'index.zip'
+        - Name: 'Build'
+          Actions:
+            -
+              Name: 'BuildLambda'
+              ActionTypeId:
+                Category: 'Build'
+                Owner: 'AWS'
+                Provider: 'CodeBuild'
+                Version: '1'
+              InputArtifacts:
+                -
+                  Name: 'SourceOutput'
+              OutputArtifacts:
+                -
+                  Name: 'BuildLambdaOutput'
+              Configuration:
+                ProjectName: !Ref CodeBuildProjectLambda
+              RunOrder: 1
+            -
+              Name: 'BuildCFn'
+              ActionTypeId:
+                Category: 'Build'
+                Owner: 'AWS'
+                Provider: 'CodeBuild'
+                Version: '1'
+              InputArtifacts:
+                -
+                  Name: 'SourceOutput'
+              OutputArtifacts:
+                -
+                  Name: 'BuildCFnOutput'
+              Configuration:
+                ProjectName: !Ref CodeBuildProjectCFn
+              RunOrder: 2
+        - Name: 'Release'
+          Actions:
+            - Name: 'ReleaseAction'
+              ActionTypeId:
+                Category: 'Deploy'
+                Owner: 'AWS'
+                Provider: 'CloudFormation'
+                Version: '1'
+              InputArtifacts:
+                -
+                  Name: 'BuildLambdaOutput'
+                -
+                  Name: 'BuildCFnOutput'
+              Configuration:
+                # ActionMode: 'CHANGE_SET_EXECUTE'
+                ActionMode: 'CREATE_UPDATE'
+                Capabilities: 'CAPABILITY_IAM'
+                # OutputFileName: ''
+                RoleArn: !GetAtt IAMRoleCloudFormation.Arn
+                StackName: !Ref FunctionStackName
+                ChangeSetName: 'update'
+                TemplateConfiguration: BuildCFnOutput::pipeline-cfn-parameters.json
+                TemplatePath: BuildCFnOutput::gomashio.yml
+                ParameterOverrides:
+                  !Sub
+                  - |
+                    {
+                      "LambdaSourceS3Bucket": {
+                        "Fn::GetArtifactAtt" : ["BuildLambdaOutput", "BucketName"]
+                      },
+                      "LambdaSourceS3Key": {
+                        "Fn::GetArtifactAtt" : ["BuildLambdaOutput", "ObjectKey"]
+                      },
+                      "ApiName": "${ApiName}",
+                      "SlackIncomingWebHook": "${WebHook}"
+                    }
+                  - ApiName:
+                      Fn::ImportValue: !Sub ${FunctionStackName}-api-name
+                    WebHook:
+                      Fn::ImportValue: !Sub ${FunctionStackName}-slack-incoming-web-hook
+
+  CodeBuildProjectLambda:
+    Type: 'AWS::CodeBuild::Project'
+    Properties: 
+      Artifacts:
+        Type: 'CODEPIPELINE'
+      BadgeEnabled: true
+      Description: !Sub 'created by ${AWS::StackName}'
+      # Environment:
+      #   Environment
+      Name: !Ref CodeBuildProjectNameLambda
+      ServiceRole: !GetAtt IAMRoleCodeBuild.Arn
+      Environment:
+        ComputeType: 'BUILD_GENERAL1_SMALL'
+        Image: 'aws/codebuild/nodejs:6.3.1'
+        Type: 'LINUX_CONTAINER'
+      Source:
+        BuildSpec: |
+          version: 0.2
+          phases:
+            pre_build:
+              commands:
+                - npm install
+            build:
+              commands:
+                - mkdir workspace
+                - cp -r index.js config/ node_modules/ workspace/
+          artifacts:
+            files:
+              - '**/*'
+            discard-paths: no
+            base-directory: workspace
+        Type: 'CODEPIPELINE'
+      TimeoutInMinutes: 30
+
+  CodeBuildProjectCFn:
+    Type: 'AWS::CodeBuild::Project'
+    Properties: 
+      Artifacts:
+        Type: 'CODEPIPELINE'
+      BadgeEnabled: true
+      Description: !Sub 'created by ${AWS::StackName}'
+      # Environment:
+      #   Environment
+      Name: !Ref CodeBuildProjectNameCFn
+      ServiceRole: !GetAtt IAMRoleCodeBuild.Arn
+      Environment:
+        ComputeType: 'BUILD_GENERAL1_SMALL'
+        Image: 'aws/codebuild/nodejs:6.3.1'
+        Type: 'LINUX_CONTAINER'
+      Source:
+        BuildSpec: |
+          version: 0.1
+          phases:
+            build:
+              commands:
+                - mkdir workspace
+                - cp cfn/pipeline-cfn-parameters.json cfn/gomashio.yml workspace/
+          artifacts:
+            type: 'zip'
+            files:
+              - '**/*'
+            base-directory: 'workspace'
+            discard-paths: no
+        Type: 'CODEPIPELINE'
+      TimeoutInMinutes: 30
+

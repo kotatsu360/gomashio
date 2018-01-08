@@ -1,0 +1,139 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  SlackIncomingWebHook:
+    Type: String
+    Default: ''
+  ApiName:
+    Type: String
+    Default: 'gomashio'
+  LambdaSourceS3Bucket:
+    Type: String
+    Default: ''
+  LambdaSourceS3Key:
+    Type: String
+    Default: ''
+Conditions:
+  UseDefaultFunction:
+    !Equals [!Ref LambdaSourceS3Bucket, '']
+Resources:
+  IAMRoleLambda:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'lambda.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/CloudWatchLogsFullAccess'
+
+  IAMRoleApiGateway:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'apigateway.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/CloudWatchLogsFullAccess'
+
+  ApiGatewayRestApi:
+    Type: 'AWS::ApiGateway::RestApi'
+    Properties:
+      EndpointConfiguration:
+        Types:
+          - 'EDGE'
+      FailOnWarnings: true
+      Name: !Ref ApiName
+
+  ApiGatewayMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      HttpMethod: 'POST'
+      AuthorizationType: 'NONE'
+      Integration:
+        Type: 'AWS_PROXY'
+        IntegrationHttpMethod: 'POST'
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations
+      RestApiId: !Ref ApiGatewayRestApi
+      ResourceId: !GetAtt ApiGatewayRestApi.RootResourceId
+
+  ApiGatewayDeployment:
+    DependsOn: ApiGatewayMethod
+    Type: 'AWS::ApiGateway::Deployment'
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayStage:
+    Type: 'AWS::ApiGateway::Stage'
+    Properties:
+      DeploymentId: !Ref ApiGatewayDeployment
+      RestApiId: !Ref ApiGatewayRestApi
+      StageName: 'production'
+
+  LambdaPermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !GetAtt LambdaFunction.Arn
+      Principal: 'apigateway.amazonaws.com'
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/POST/
+
+  LambdaFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Code:
+        !If
+        - UseDefaultFunction
+        -
+          ZipFile: |
+            exports.handler = (event, context, callback) => {
+              const responce = {
+                statusCode: 200,
+                headers: {},
+                body: JSON.stringify({ 'message': 'lambda received' })
+              };
+              callback(null, responce);
+            };
+        -
+          S3Bucket: !Ref LambdaSourceS3Bucket
+          S3Key: !Ref LambdaSourceS3Key
+      Description: ''
+      Environment:
+        Variables:
+          slackIncomingWebHook: !Ref SlackIncomingWebHook
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt IAMRoleLambda.Arn
+      Runtime: nodejs6.10
+      Timeout: 3
+
+  # LambdaVersion:
+  #   Type: 'AWS::Lambda::Version'
+  #   Properties:
+  #     FunctionName: !Ref LambdaFunction
+
+  # LambdaAlias:
+  #   Type: 'AWS::Lambda::Alias'
+  #   Properties:
+  #     Description: 'codedeploy target alias'
+  #     FunctionName: !Ref LambdaFunction
+  #     FunctionVersion: !GetAtt LambdaVersion.Version
+  #     Name: 'release'
+  #     # RoutingConfig:
+  #     #   AliasRoutingConfiguration
+
+Outputs:
+  OutputApiName:
+    Value: !Ref ApiName
+    Export:
+      Name: !Sub ${AWS::StackName}-api-name
+  OutputSlackIncomingWebHook:
+    Value: !Ref SlackIncomingWebHook
+    Export:
+      Name: !Sub ${AWS::StackName}-slack-incoming-web-hook

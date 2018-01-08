@@ -1,0 +1,18 @@
+{
+    "Parameters": {
+    },
+    "Tags": {
+        "Scope": "Infra"
+    },
+    "StackPolicy": {
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "NotAction": "Update:Delete",
+                "Principal": "*",
+                "Resource": "*"
+            }
+        ]
+    }
+}
+
