@@ -2,6 +2,18 @@
 
 inspired by https://github.com/kawahara/github2slack-lambda
 
+## Feature
+* convert GitHub mention to Slack mention
+    * reviewers
+    * assignees
+    * issue / pr comment
+
+
+## Architecture
+```
+GitHub -> Amazon API Gateway -> AWS Lambda -> Slack
+```
+
 ## Basic Usage
 ### initialize api gateway / lambda function
 1. create webhook
