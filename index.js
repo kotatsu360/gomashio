@@ -35,6 +35,7 @@ exports.handler = (event, context, callback) => {
   console.info(payloadText);
   
   const payload = JSON.parse(payloadText);
+  const action = payload.action || '';
 
   let text='';
 
@@ -48,8 +49,8 @@ exports.handler = (event, context, callback) => {
       break;
     case 'issues':
       const issue = payload.issue;
-      if (payload.action == 'assigned') {
-        text += 'Issue ' + payload.action + '\n';
+      if (action == 'assigned') {
+        text += 'Issue ' + action + '\n';
 
         text += 'Assignees: ' + userList(issue.assignees) + '\n';
         text += link(issue.html_url, issue.title);
@@ -57,8 +58,8 @@ exports.handler = (event, context, callback) => {
       break;
     case 'pull_request':
       const pull_request = payload.pull_request;
-      if (payload.action == 'assigned') {
-        text += 'Pull Request ' + payload.action + '\n';
+      if (action == 'assigned') {
+        text += 'Pull Request ' + action + '\n';
         text += pull_request.title + '\n';
 
         text += 'Reviewers: ' + userList(pull_request.requested_reviewers) + '\n';
