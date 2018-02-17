@@ -2,5 +2,10 @@
   "account_map": {
     "github account": "slack account",
     "kotatsu360": "kotatsu360"
+  },
+  "ignore_event_map": {
+    "issue_comment": [
+      "edited"
+    ]
   }
 }

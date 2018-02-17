@@ -10,6 +10,11 @@ const g2s = function (user) {
   return config.account_map[user] || user;
 };
 
+const isIgnore = function (event, action) {
+  index = (config.ignore_event_map[event] || []).indexOf(action);
+  return index !== -1
+};
+
 const userList = function (obj) {
   return obj.map(function(x){
     return '@' + g2s(x.login);
@@ -38,6 +43,10 @@ exports.handler = (event, context, callback) => {
   const action = payload.action || '';
 
   let text='';
+
+  if (isIgnore(githubEvent, action)) {
+    callback(null, responce);
+  }
 
   switch (githubEvent){
     case 'issue_comment':
