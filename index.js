@@ -1,6 +1,14 @@
 const slack = process.env.slackIncomingWebHook;
 const request = require('request');
-const config = require('./config/config.json');
+
+const config = (function () {
+  let config = require('./config/config.json');
+  const topLevelKeyList = ['account_map', 'ignore_event_map'];
+  for (let i = 0, len = topLevelKeyList.length; i < len; i++) {
+    config[topLevelKeyList[i]] = config[topLevelKeyList[i]] || {};
+  }
+  return config;
+})();
 
 const link = function (url, text) {
   return '<' + url + '|' + text + '>';
@@ -11,8 +19,8 @@ const g2s = function (user) {
 };
 
 const isIgnore = function (event, action) {
-  index = (config.ignore_event_map[event] || []).indexOf(action);
-  return index !== -1
+  const index = (config.ignore_event_map[event] || []).indexOf(action);
+  return index !== -1;
 };
 
 const userList = function (obj) {
