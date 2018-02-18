@@ -38,24 +38,29 @@ const replaceUser = function (text) {
 };
 
 exports.handler = (event, context, callback) => {
+  // responce to GitHub
+  const responce = {
+    statusCode: 200,
+    headers: {},
+    body: JSON.stringify({ 'message': 'gomashio received' })
+  };
 
   const githubEvent = event.headers['X-GitHub-Event'];
   const payloadText = decodeURIComponent(event.body.replace(/^payload=/,''));
-
-  console.info(githubEvent);
-
-  // [NOTE] CloudWatch Logs will display cleanly for text format than json format.
-  console.info(payloadText);
-  
   const payload = JSON.parse(payloadText);
   const action = payload.action || '';
 
-  let text='';
+  // [NOTE] CloudWatch Logs will display cleanly for text format than json format.
+  console.info(githubEvent);
+  console.info(payloadText);
+  console.info(action);
 
   if (isIgnore(githubEvent, action)) {
-    callback(null, responce);
+    console.info('ignore event. nothing to do.');
+    context.succeed(responce);
   }
 
+  let text='';
   switch (githubEvent){
     case 'issue_comment':
     case 'pull_request_review_comment':
@@ -89,15 +94,9 @@ exports.handler = (event, context, callback) => {
       break;
   }
 
-  // responce to GitHub
-  const responce = {
-    statusCode: 200,
-    headers: {},
-    body: JSON.stringify({ 'message': 'gomashio received' })
-  };
-
   if (text === '') {
-    callback(null, responce);
+    console.info('text is empty. nothing to do.');
+    context.succeed(responce);
   }
 
   request({
@@ -106,6 +105,7 @@ exports.handler = (event, context, callback) => {
     headers: {'Content-Type': 'application/json'},
     json: {text: text, link_names: 1}
   }, function () {
-    callback(null, responce);
+    console.info('post to slack.');
+    context.succeed(responce);
   });
 };
