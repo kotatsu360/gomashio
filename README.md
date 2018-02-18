@@ -8,6 +8,27 @@ inspired by https://github.com/kawahara/github2slack-lambda
     * assignees
     * issue / pr comment
 
+## Format
+
+| key | value |
+| --- | --- |
+| account\_map | A object with key of github account  and value of slack account |
+| ignore\_event\_map | A object with key of github event and value of array of action for github event|
+
+sample
+
+```json
+{
+  "account_map": {
+    "kotatsu360": "tmitsuno"
+  },
+  "ignore_event_map": {
+    "issue_comment": [
+      "edited"
+    ]
+  }
+}
+```
 
 ## Architecture
 ```

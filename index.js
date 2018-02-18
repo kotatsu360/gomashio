@@ -1,6 +1,14 @@
 const slack = process.env.slackIncomingWebHook;
 const request = require('request');
-const config = require('./config/config.json');
+
+const config = (function () {
+  let config = require('./config/config.json');
+  const topLevelKeyList = ['account_map', 'ignore_event_map'];
+  for (let i = 0, len = topLevelKeyList.length; i < len; i++) {
+    config[topLevelKeyList[i]] = config[topLevelKeyList[i]] || {};
+  }
+  return config;
+})();
 
 const link = function (url, text) {
   return '<' + url + '|' + text + '>';
@@ -8,6 +16,11 @@ const link = function (url, text) {
 
 const g2s = function (user) {
   return config.account_map[user] || user;
+};
+
+const isIgnore = function (event, action) {
+  const index = (config.ignore_event_map[event] || []).indexOf(action);
+  return index !== -1;
 };
 
 const userList = function (obj) {
@@ -25,19 +38,29 @@ const replaceUser = function (text) {
 };
 
 exports.handler = (event, context, callback) => {
+  // responce to GitHub
+  const responce = {
+    statusCode: 200,
+    headers: {},
+    body: JSON.stringify({ 'message': 'gomashio received' })
+  };
 
   const githubEvent = event.headers['X-GitHub-Event'];
   const payloadText = decodeURIComponent(event.body.replace(/^payload=/,''));
-
-  console.info(githubEvent);
+  const payload = JSON.parse(payloadText);
+  const action = payload.action || '';
 
   // [NOTE] CloudWatch Logs will display cleanly for text format than json format.
+  console.info(githubEvent);
   console.info(payloadText);
-  
-  const payload = JSON.parse(payloadText);
+  console.info(action);
+
+  if (isIgnore(githubEvent, action)) {
+    console.info('ignore event. nothing to do.');
+    context.succeed(responce);
+  }
 
   let text='';
-
   switch (githubEvent){
     case 'issue_comment':
     case 'pull_request_review_comment':
@@ -48,8 +71,8 @@ exports.handler = (event, context, callback) => {
       break;
     case 'issues':
       const issue = payload.issue;
-      if (payload.action == 'assigned') {
-        text += 'Issue ' + payload.action + '\n';
+      if (action == 'assigned') {
+        text += 'Issue ' + action + '\n';
 
         text += 'Assignees: ' + userList(issue.assignees) + '\n';
         text += link(issue.html_url, issue.title);
@@ -57,8 +80,8 @@ exports.handler = (event, context, callback) => {
       break;
     case 'pull_request':
       const pull_request = payload.pull_request;
-      if (payload.action == 'assigned') {
-        text += 'Pull Request ' + payload.action + '\n';
+      if (action == 'assigned') {
+        text += 'Pull Request ' + action + '\n';
         text += pull_request.title + '\n';
 
         text += 'Reviewers: ' + userList(pull_request.requested_reviewers) + '\n';
@@ -71,15 +94,9 @@ exports.handler = (event, context, callback) => {
       break;
   }
 
-  // responce to GitHub
-  const responce = {
-    statusCode: 200,
-    headers: {},
-    body: JSON.stringify({ 'message': 'gomashio received' })
-  };
-
   if (text === '') {
-    callback(null, responce);
+    console.info('text is empty. nothing to do.');
+    context.succeed(responce);
   }
 
   request({
@@ -88,6 +105,7 @@ exports.handler = (event, context, callback) => {
     headers: {'Content-Type': 'application/json'},
     json: {text: text, link_names: 1}
   }, function () {
-    callback(null, responce);
+    console.info('post to slack.');
+    context.succeed(responce);
   });
 };
