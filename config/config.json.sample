@@ -6,5 +6,9 @@
     "issue_comment": [
       "edited"
     ]
+  },
+  "repository_map": {
+    ".*_api": "#api",
+    ".*": "#random"
   }
 }
