@@ -60,7 +60,7 @@ const isIgnoreEvent = function (event, action) {
 
 const userList = function (obj) {
   return obj.map(function(x){
-    return '@' + g2s(x.login);
+    return '<@' + g2s(x.login) + '>';
   }).join(' ');
 };
 
@@ -68,7 +68,7 @@ const replaceUser = function (text) {
   // [NOTE] GitHub Webhook replace space to plus (+) mark.
   // There is no way to distinguish between + in the text and + in the blank.
   return text.replace(/\+/g,' ').replace(/@([a-zA-Z0-9_\-]+)/g, function(match, p1) {
-    return '@' + g2s(p1);
+    return '<@' + g2s(p1) + '>';
   });
 };
 
