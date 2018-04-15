@@ -1,5 +1,6 @@
-const slack = process.env.slackIncomingWebHook;
+const slackToken = process.env.slackToken;
 const request = require('request');
+const rp      = require('request-promise-native');
 
 class Config {
   constructor() {
@@ -27,6 +28,22 @@ const link = function (url, text) {
   return '<' + url + '|' + text + '>';
 };
 
+// slack real name to slack user id
+const r2i = function (members) {
+  let account_map = {};
+
+  // [NOTE]
+  // config.get('account_map') = { 'github account': 'slack real name' }
+  // members                   = { 'slack real name': 'slack user id'}
+  // => account_map = { 'github account': 'slack user id' }
+
+  Object.keys(config.get('account_map')).forEach(function (key) {
+    account_map[key] = members[config.get('account_map')[key]] || config.get('account_map')[key];
+  });
+
+  return account_map;
+};
+
 // github 2 slack
 const g2s = function (user) {
   return config.get('account_map')[user] || user;
@@ -34,11 +51,6 @@ const g2s = function (user) {
 
 // repository to channel
 const r2c = function(repository) {
-
-  if (Object.keys(config.get('repository_map')).length === 0) {
-    return '';
-  }
-
   const name = repository['name'];
   let channel = null;
 
@@ -107,58 +119,93 @@ exports.handler = (event, context, callback) => {
     console.info('repository is not eligible for notification. nothing to do.');
     context.succeed(responce);
   }
-  let text='';
-  switch (githubEvent){
-    case 'issue_comment':
-    case 'pull_request_review_comment':
-      const comment = payload.comment;
-      text += comment.user.login + ': \n';
-      text += replaceUser(comment.body) + '\n';
-      text += comment.html_url;
-      break;
-    case 'issues':
-      const issue = payload.issue;
-      if (action == 'assigned') {
-        text += 'Issue ' + action + '\n';
 
-        text += 'Assignees: ' + userList(issue.assignees) + '\n';
-        text += link(issue.html_url, issue.title);
+  rp({
+    url: 'https://slack.com/api/users.list',
+    method: 'GET',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    json: true,
+    qs: {
+      token: slackToken
+    }
+  })
+    .then(function (res) {
+      if (res['ok'] === false) {
+        throw new Error(res['error']);
       }
-      break;
-    case 'pull_request':
-      const pull_request = payload.pull_request;
-      if (action == 'assigned') {
-        text += 'Pull Request ' + action + '\n';
-        text += pull_request.title + '\n';
 
-        text += 'Reviewers: ' + userList(pull_request.requested_reviewers) + '\n';
-        text += 'Assignees: ' + userList(pull_request.assignees) + '\n';
+      // [NOTE]
+      // return an object like { 'Tatsuro Mitsuno': '<slack user id>', }
+      const active_members = res['members'].filter(function(member){
+        return (member['deleted'] === false && member['is_bot'] === false);
+      });
 
-        text += link(pull_request.html_url, pull_request.title);
+      let name_id_pair = {};
+      for(let i = 0; i < active_members.length; i++) {
+        name_id_pair[active_members[i]['real_name']] = active_members[i]['id'];
       }
-      break;
-    default:
-      break;
-  }
+      return name_id_pair;
+    }).then(function(members) {
+      config.set('account_map', r2i(members));
 
-  if (text === '') {
-    console.info('text is empty. nothing to do.');
-    context.succeed(responce);
-  }
+      let text='';
+      switch (githubEvent){
+        case 'issue_comment':
+        case 'pull_request_review_comment':
+          const comment = payload.comment;
+          text += comment.user.login + ': \n';
+          text += replaceUser(comment.body) + '\n';
+          text += comment.html_url;
+          break;
+        case 'issues':
+          const issue = payload.issue;
+          if (action == 'assigned') {
+            text += 'Issue ' + action + '\n';
 
-  let params = {text: text, link_names: 1};
-  if (channel !== '') {
-    params['channel'] = channel;
-  }
+            text += 'Assignees: ' + userList(issue.assignees) + '\n';
+            text += link(issue.html_url, issue.title);
+          }
+          break;
+        case 'pull_request':
+          const pull_request = payload.pull_request;
+          if (action == 'assigned') {
+            text += 'Pull Request ' + action + '\n';
+            text += pull_request.title + '\n';
 
-  request({
-    url: slack,
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    json: params
-  }, function () {
-    console.info('post to slack.');
-    context.succeed(responce);
-  });
+            text += 'Reviewers: ' + userList(pull_request.requested_reviewers) + '\n';
+            text += 'Assignees: ' + userList(pull_request.assignees) + '\n';
+
+            text += link(pull_request.html_url, pull_request.title);
+          }
+          break;
+        default:
+          break;
+      }
+
+      if (text === '') {
+        console.info('text is empty. nothing to do.');
+        context.succeed(responce);
+      }
+
+      request({
+        url: 'https://slack.com/api/chat.postMessage',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Authorization': 'Bearer ' + slackToken
+        },
+        json: {
+          text: text,
+          link_names: 1,
+          channel: channel
+        }
+      }, function () {
+        console.info('post to slack.');
+        context.succeed(responce);
+      });
+    })
+    .catch(function (err) {
+      console.info(err);
+      context.succeed(responce);
+    });
 };
-

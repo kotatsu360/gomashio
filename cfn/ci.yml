@@ -248,19 +248,19 @@ Resources:
                         "Fn::GetArtifactAtt" : ["BuildLambdaOutput", "ObjectKey"]
                       },
                       "ApiName": "${ApiName}",
-                      "SlackIncomingWebHook": "${WebHook}"
+                      "SlackToken": "${Token}"
                     }
                   - ApiName:
                       Fn::ImportValue: !Sub ${FunctionStackName}-api-name
-                    WebHook:
-                      Fn::ImportValue: !Sub ${FunctionStackName}-slack-incoming-web-hook
+                    Token:
+                      Fn::ImportValue: !Sub ${FunctionStackName}-slack-token
 
   CodeBuildProjectLambda:
     Type: 'AWS::CodeBuild::Project'
     Properties: 
       Artifacts:
         Type: 'CODEPIPELINE'
-      BadgeEnabled: true
+      BadgeEnabled: false
       Description: !Sub 'created by ${AWS::StackName}'
       # Environment:
       #   Environment
@@ -294,7 +294,7 @@ Resources:
     Properties: 
       Artifacts:
         Type: 'CODEPIPELINE'
-      BadgeEnabled: true
+      BadgeEnabled: false
       Description: !Sub 'created by ${AWS::StackName}'
       # Environment:
       #   Environment

@@ -2,13 +2,13 @@
   "account_map": {
     "kotatsu360": "tmitsuno"
   },
+  "repository_map": {
+    ".*_api": "#api",
+    ".*": "#random"
+  },
   "ignore_event_map": {
     "issue_comment": [
       "edited"
     ]
-  },
-  "repository_map": {
-    ".*_api": "#api",
-    ".*": "#random"
   }
 }
