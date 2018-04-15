@@ -1,14 +1,27 @@
 const slack = process.env.slackIncomingWebHook;
 const request = require('request');
 
-const config = (function () {
-  let config = require('./config/config.json');
-  const topLevelKeyList = ['account_map', 'ignore_event_map', 'repository_map'];
-  for (let i = 0, len = topLevelKeyList.length; i < len; i++) {
-    config[topLevelKeyList[i]] = config[topLevelKeyList[i]] || {};
+class Config {
+  constructor() {
+    this.map = new Map;
+
+    let config = require('./config/config.json');
+    const topLevelKeyList = ['account_map', 'ignore_event_map', 'repository_map'];
+    for (let i = 0, len = topLevelKeyList.length; i < len; i++) {
+      this.map.set(topLevelKeyList[i],config[topLevelKeyList[i]] || {});
+    }
   }
-  return config;
-})();
+
+  set(key, value) {
+    this.map.set(key, value);
+  }
+
+  get(key) {
+    return this.map.get(key);
+  }
+}
+
+const config = new Config();
 
 const link = function (url, text) {
   return '<' + url + '|' + text + '>';
@@ -16,23 +29,23 @@ const link = function (url, text) {
 
 // github 2 slack
 const g2s = function (user) {
-  return config.account_map[user] || user;
+  return config.get('account_map')[user] || user;
 };
 
 // repository to channel
 const r2c = function(repository) {
 
-  if (Object.keys(config.repository_map).length === 0) {
+  if (Object.keys(config.get('repository_map')).length === 0) {
     return '';
   }
 
   const name = repository['name'];
   let channel = null;
 
-  for ( let rule in config.repository_map ) {
+  for ( let rule in config.get('repository_map') ) {
     let re = new RegExp(rule, 'i');
     if (re.test(name)) {
-      channel = config.repository_map[rule];
+      channel = config.get('repository_map')[rule];
       break;
     }
   }
@@ -41,7 +54,7 @@ const r2c = function(repository) {
 };
 
 const isIgnoreEvent = function (event, action) {
-  const index = (config.ignore_event_map[event] || []).indexOf(action);
+  const index = (config.get('ignore_event_map')[event] || []).indexOf(action);
   return index !== -1;
 };
 
