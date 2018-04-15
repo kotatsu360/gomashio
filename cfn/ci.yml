@@ -260,7 +260,7 @@ Resources:
     Properties: 
       Artifacts:
         Type: 'CODEPIPELINE'
-      BadgeEnabled: true
+      BadgeEnabled: false
       Description: !Sub 'created by ${AWS::StackName}'
       # Environment:
       #   Environment
@@ -294,7 +294,7 @@ Resources:
     Properties: 
       Artifacts:
         Type: 'CODEPIPELINE'
-      BadgeEnabled: true
+      BadgeEnabled: false
       Description: !Sub 'created by ${AWS::StackName}'
       # Environment:
       #   Environment
