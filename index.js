@@ -42,7 +42,7 @@ const r2i = function (members) {
   });
 
   return account_map;
-}
+};
 
 // github 2 slack
 const g2s = function (user) {
@@ -132,15 +132,19 @@ exports.handler = (event, context, callback) => {
     .then(function (res) {
       if (res['ok'] === false) {
         throw new Error(res['error']);
-      };
+      }
 
       // [NOTE]
-      // return an array like [ { 'Tatsuro Mitsuno': '<slack user id>'},  ... ]
-      return res['members'].filter(function(member){
+      // return an object like { 'Tatsuro Mitsuno': '<slack user id>', }
+      const active_members = res['members'].filter(function(member){
         return (member['deleted'] === false && member['is_bot'] === false);
-      }).map(function(member){
-        return {member['real_name']: member['id']};
       });
+
+      let name_id_pair = {};
+      for(let i = 0; i < active_members.length; i++) {
+        name_id_pair[active_members[i]['real_name']] = active_members[i]['id'];
+      }
+      return name_id_pair;
     }).then(function(members) {
       config.set('account_map', r2i(members));
 
