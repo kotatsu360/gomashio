@@ -19,7 +19,7 @@ class Config {
   get(key) {
     return this.map.get(key);
   }
-};
+}
 
 const config = new Config();
 
