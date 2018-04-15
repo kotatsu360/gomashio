@@ -1,5 +1,8 @@
 {
   "account_map": {
-    "kotatsu360": "tmitsuno"
+    "kotatsu360": "Tatsuro Mitsuno",
+  },
+  "repository_map": {
+    ".*": "#general"
   }
 }
