@@ -1,4 +1,4 @@
-const slack = process.env.slackIncomingWebHook;
+const slack = process.env.slackToken;
 const request = require('request');
 
 class Config {
