@@ -27,6 +27,22 @@ const link = function (url, text) {
   return '<' + url + '|' + text + '>';
 };
 
+// slack real name to slack user id
+const r2i = function (members) {
+  let account_map = {};
+
+  // [NOTE]
+  // config.get('account_map') = { 'github account': 'slack real name' }
+  // members                   = { 'slack real name': 'slack user id'}
+  // => account_map = { 'github account': 'slack user id' }
+
+  Object.keys(config.get('account_map')).forEach(function (key) {
+    account_map[key] = members[config.get('account_map')[key]] || config.get('account_map')[key];
+  });
+
+  return account_map;
+}
+
 // github 2 slack
 const g2s = function (user) {
   return config.get('account_map')[user] || user;
