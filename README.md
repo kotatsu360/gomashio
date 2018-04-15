@@ -13,7 +13,7 @@ inspired by https://github.com/kawahara/github2slack-lambda
 | key | value | default | required |
 | --- | --- | --- | --- |
 | account\_map | A object with key of github account  and value of slack account | - | o |
-| repository\_map | A object with key of github repository and value of slack channel| All repositories will be notified to the default channel | o |
+| repository\_map | A object with key of github repository and value of slack channel| - | o |
 | ignore\_event\_map | A object with key of github event and value of array of action for github event| - |
 
 sample
