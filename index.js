@@ -50,11 +50,6 @@ const g2s = function (user) {
 
 // repository to channel
 const r2c = function(repository) {
-
-  if (Object.keys(config.get('repository_map')).length === 0) {
-    return '';
-  }
-
   const name = repository['name'];
   let channel = null;
 
