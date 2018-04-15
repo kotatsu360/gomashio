@@ -191,7 +191,7 @@ exports.handler = (event, context, callback) => {
           'Authorization': 'Bearer ' + slackToken
         },
         json: {
-          text: text
+          text: text,
           link_names: 1,
           channel: channel
         }
