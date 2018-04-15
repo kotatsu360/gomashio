@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: 2010-09-09
 Parameters:
-  SlackIncomingWebHook:
+  SlackToken:
     Type: String
     Default: ''
   ApiName:
@@ -106,7 +106,7 @@ Resources:
       Description: ''
       Environment:
         Variables:
-          slackIncomingWebHook: !Ref SlackIncomingWebHook
+          slackToken: !Ref SlackToken
       Handler: index.handler
       MemorySize: 128
       Role: !GetAtt IAMRoleLambda.Arn
@@ -133,7 +133,7 @@ Outputs:
     Value: !Ref ApiName
     Export:
       Name: !Sub ${AWS::StackName}-api-name
-  OutputSlackIncomingWebHook:
-    Value: !Ref SlackIncomingWebHook
+  OutputSlackToken:
+    Value: !Ref SlackToken
     Export:
-      Name: !Sub ${AWS::StackName}-slack-incoming-web-hook
+      Name: !Sub ${AWS::StackName}-slack-token

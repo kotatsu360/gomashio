@@ -248,12 +248,12 @@ Resources:
                         "Fn::GetArtifactAtt" : ["BuildLambdaOutput", "ObjectKey"]
                       },
                       "ApiName": "${ApiName}",
-                      "SlackIncomingWebHook": "${WebHook}"
+                      "SlackToken": "${Token}"
                     }
                   - ApiName:
                       Fn::ImportValue: !Sub ${FunctionStackName}-api-name
-                    WebHook:
-                      Fn::ImportValue: !Sub ${FunctionStackName}-slack-incoming-web-hook
+                    Token:
+                      Fn::ImportValue: !Sub ${FunctionStackName}-slack-token
 
   CodeBuildProjectLambda:
     Type: 'AWS::CodeBuild::Project'
