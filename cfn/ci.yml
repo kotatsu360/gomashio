@@ -248,13 +248,12 @@ Resources:
                         "Fn::GetArtifactAtt" : ["BuildLambdaOutput", "ObjectKey"]
                       },
                       "ApiName": "${ApiName}",
-                      "SlackToken": "${Token}"
+                      "EncryptedTokenName": "${Token}"
                     }
                   - ApiName:
                       Fn::ImportValue: !Sub ${FunctionStackName}-api-name
                     Token:
-                      Fn::ImportValue: !Sub ${FunctionStackName}-slack-token
-
+                      Fn::ImportValue: !Sub ${FunctionStackName}-encrypted-token-name
   CodeBuildProjectLambda:
     Type: 'AWS::CodeBuild::Project'
     Properties: 

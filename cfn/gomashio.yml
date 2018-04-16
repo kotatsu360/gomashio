@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: 2010-09-09
 Parameters:
-  SlackToken:
+  EncryptedTokenName:
     Type: String
     Default: ''
   ApiName:
@@ -28,7 +28,15 @@ Resources:
             Action: 'sts:AssumeRole'
       ManagedPolicyArns:
         - 'arn:aws:iam::aws:policy/CloudWatchLogsFullAccess'
-
+      Policies:
+        - PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 'ssm:GetParameter'
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${EncryptedTokenName}
+          PolicyName: 'lambda-ssm'
   IAMRoleApiGateway:
     Type: 'AWS::IAM::Role'
     Properties:
@@ -106,7 +114,7 @@ Resources:
       Description: ''
       Environment:
         Variables:
-          slackToken: !Ref SlackToken
+          encryptedTokenName: !Ref EncryptedTokenName
       Handler: index.handler
       MemorySize: 128
       Role: !GetAtt IAMRoleLambda.Arn
@@ -133,7 +141,7 @@ Outputs:
     Value: !Ref ApiName
     Export:
       Name: !Sub ${AWS::StackName}-api-name
-  OutputSlackToken:
-    Value: !Ref SlackToken
+  OutputEncryptedTokenName:
+    Value: !Ref EncryptedTokenName
     Export:
-      Name: !Sub ${AWS::StackName}-slack-token
+      Name: !Sub ${AWS::StackName}-encrypted-token-name
