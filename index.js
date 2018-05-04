@@ -154,7 +154,13 @@ exports.handler = (event, context, callback) => {
 
     let name_id_pair = {};
     for(let i = 0; i < active_members.length; i++) {
-      name_id_pair[active_members[i]['real_name']] = active_members[i]['id'];
+      let name = '';
+      if (active_members[i]['profile']['display_name_normalized'] === '') {
+        name = active_members[i]['profile']['real_name_normalized'];
+      } else {
+        name = active_members[i]['profile']['display_name_normalized'];
+      }
+      name_id_pair[name] = active_members[i]['id'];
     }
     return name_id_pair;
   }).then(function(members) {
