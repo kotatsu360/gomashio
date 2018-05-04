@@ -1,9 +1,9 @@
 const encryptedTokenName = process.env.encryptedTokenName;
+const dynamoDBTableSlackCache = process.env.dynamoDBTableSlackCache;
 const request = require('request');
 const rp      = require('request-promise-native');
 const AWS     = require('aws-sdk');
-
-let  slackToken = '';
+const moment  = require('moment');
 
 class Config {
   constructor() {
@@ -25,11 +25,95 @@ class Config {
   }
 }
 
-const config = new Config();
-const ssm    = new AWS.SSM({apiVersion: '2014-11-06'});
+const config   = new Config();
 
+// promise functions
+const getItemPromise = function(table) {
+  const dynamodb = new AWS.DynamoDB({apiVersion: '2012-08-10'});
+  return dynamodb.getItem({
+    Key: {
+      'entrypoint': {
+        S: 'users.list'
+      }
+    },
+    TableName: table,
+    ConsistentRead: true,
+    ReturnConsumedCapacity: 'TOTAL'
+  }).promise();
+};
+
+const requestPromise = function(token) {
+  return rp({
+    url: 'https://slack.com/api/users.list',
+    method: 'GET',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    json: true,
+    qs: {
+      token: token
+    }
+  });
+};
+
+const getParameterPromise = function(token) {
+  const ssm      = new AWS.SSM({apiVersion: '2014-11-06'});
+  return ssm.getParameter({
+    Name: token,
+    WithDecryption: true
+  }).promise();
+};
+
+const updateItemPromise = function(table, name_id_pair) {
+  const dynamodb = new AWS.DynamoDB({apiVersion: '2012-08-10'});
+  return dynamodb.updateItem({
+    Key: {
+      'entrypoint': {
+        S: 'users.list'
+      }
+    },
+    UpdateExpression: 'SET #E=:e, #R=:r',
+    ExpressionAttributeNames: {
+      '#E': 'expired_at',
+      '#R': 'response'
+    },
+    ExpressionAttributeValues: {
+      ':e': {
+        N: moment().add('days', 1).unix().toString()
+      },
+      ':r': {
+        S: JSON.stringify(name_id_pair)
+      }
+    },
+    ReturnValues: 'ALL_NEW',
+    TableName: table,
+    ReturnConsumedCapacity: 'TOTAL'
+  }).promise();
+};
+
+
+
+// utilities
 const link = function (url, text) {
   return '<' + url + '|' + text + '>';
+};
+
+const name_id_pair = function (members) {
+  // [NOTE]
+  // return an object like { 'Tatsuro Mitsuno': '<slack user id>', }
+  const active_members = members.filter(function(member){
+    return (member['deleted'] === false && member['is_bot'] === false);
+  });
+
+  let pair = {};
+  for(let i = 0; i < active_members.length; i++) {
+    let name = '';
+    if (active_members[i]['profile']['display_name_normalized'] === '') {
+      name = active_members[i]['profile']['real_name_normalized'];
+    } else {
+      name = active_members[i]['profile']['display_name_normalized'];
+    }
+    pair[name] = active_members[i]['id'];
+  }
+  return pair;
 };
 
 // slack real name to slack user id
@@ -124,47 +208,36 @@ exports.handler = (event, context, callback) => {
     context.succeed(responce);
   }
 
-  const getParameterPromise = ssm.getParameter({
-    Name: encryptedTokenName,
-    WithDecryption: true
-  }).promise();
+  getParameterPromise(encryptedTokenName).then(function(res) {
+    config.set('slackToken', res.Parameter.Value);
+    return getItemPromise(dynamoDBTableSlackCache);
+  }).then(function(res) {
+    const item = res.Item || {};
 
-  getParameterPromise.then(function(res) {
-    slackToken = res.Parameter.Value;
+    if (Object.keys(item).length === 0) {
+      console.info('cache unavailable');
 
-    return rp({
-      url: 'https://slack.com/api/users.list',
-      method: 'GET',
-      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-      json: true,
-      qs: {
-        token: slackToken
-      }
-    });
-  }).then(function (res) {
-    if (res['ok'] === false) {
-      throw new Error(res['error']);
+      return requestPromise(config.get('slackToken')).then(function (res) {
+        if (res['ok'] === false) {
+          throw new Error(res['error']);
+        }
+        return updateItemPromise(dynamoDBTableSlackCache, name_id_pair(res['members']));
+
+      }).then(function (res) {
+        return res.Attributes.response['S'];
+
+      }).catch(function (err) {
+        console.info(err);
+        context.succeed(responce);
+      });
+
+    } else {
+      console.info('cache available');
+      return item.response['S'];
+
     }
-
-    // [NOTE]
-    // return an object like { 'Tatsuro Mitsuno': '<slack user id>', }
-    const active_members = res['members'].filter(function(member){
-      return (member['deleted'] === false && member['is_bot'] === false);
-    });
-
-    let name_id_pair = {};
-    for(let i = 0; i < active_members.length; i++) {
-      let name = '';
-      if (active_members[i]['profile']['display_name_normalized'] === '') {
-        name = active_members[i]['profile']['real_name_normalized'];
-      } else {
-        name = active_members[i]['profile']['display_name_normalized'];
-      }
-      name_id_pair[name] = active_members[i]['id'];
-    }
-    return name_id_pair;
   }).then(function(members) {
-    config.set('account_map', r2i(members));
+    config.set('account_map', r2i(JSON.parse(members)));
 
     let text='';
     switch (githubEvent){
@@ -210,15 +283,15 @@ exports.handler = (event, context, callback) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json; charset=utf-8',
-        'Authorization': 'Bearer ' + slackToken
+        'Authorization': 'Bearer ' + config.get('slackToken')
       },
       json: {
         text: text,
         link_names: 1,
         channel: channel
       }
-    }, function () {
-      console.info('post to slack.');
+    }, function (error, res, body) {
+      console.info(body);
       context.succeed(responce);
     });
   }).catch(function (err) {
