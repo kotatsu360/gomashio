@@ -173,8 +173,8 @@ const replaceUser = function (text) {
 };
 
 exports.handler = (event, context, callback) => {
-  // responce to GitHub
-  const responce = {
+  // response to GitHub
+  const response = {
     statusCode: 200,
     headers: {},
     body: JSON.stringify({ 'message': 'gomashio received' })
@@ -194,18 +194,18 @@ exports.handler = (event, context, callback) => {
 
   if (isIgnoreEvent(githubEvent, action)) {
     console.info('ignore event. nothing to do.');
-    context.succeed(responce);
+    context.succeed(response);
   }
 
   if (Object.keys(repository).length === 0) {
     console.info('repository is empty. nothing to do.');
-    context.succeed(responce);
+    context.succeed(response);
   }
 
   const channel = r2c(repository);
   if (channel === null) {
     console.info('repository is not eligible for notification. nothing to do.');
-    context.succeed(responce);
+    context.succeed(response);
   }
 
   getParameterPromise(encryptedTokenName).then(function(res) {
@@ -228,7 +228,7 @@ exports.handler = (event, context, callback) => {
 
       }).catch(function (err) {
         console.info(err);
-        context.succeed(responce);
+        context.succeed(response);
       });
 
     } else {
@@ -275,7 +275,7 @@ exports.handler = (event, context, callback) => {
 
     if (text === '') {
       console.info('text is empty. nothing to do.');
-      context.succeed(responce);
+      context.succeed(response);
     }
 
     request({
@@ -292,10 +292,10 @@ exports.handler = (event, context, callback) => {
       }
     }, function (error, res, body) {
       console.info(body);
-      context.succeed(responce);
+      context.succeed(response);
     });
   }).catch(function (err) {
     console.info(err);
-    context.succeed(responce);
+    context.succeed(response);
   });
 };
