@@ -37,6 +37,16 @@ Resources:
                   - 'ssm:GetParameter'
                 Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${EncryptedTokenName}
           PolicyName: 'lambda-ssm'
+        - PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:UpdateItem'
+                Resource: !GetAtt DynamoDBTableSlackCache.Arn
+          PolicyName: 'lambda-dynamodb'
+
   IAMRoleApiGateway:
     Type: 'AWS::IAM::Role'
     Properties:
@@ -115,11 +125,30 @@ Resources:
       Environment:
         Variables:
           encryptedTokenName: !Ref EncryptedTokenName
+          dynamoDBTableSlackCache: !Ref DynamoDBTableSlackCache
       Handler: index.handler
       MemorySize: 128
       Role: !GetAtt IAMRoleLambda.Arn
       Runtime: nodejs6.10
       Timeout: 3
+
+# DynamoDB ------------------------------
+  DynamoDBTableSlackCache:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: 'entrypoint'
+          AttributeType: 'S'
+      KeySchema:
+        -
+          AttributeName: 'entrypoint'
+          KeyType: 'HASH'
+      ProvisionedThroughput:
+        ReadCapacityUnits: 1
+        WriteCapacityUnits: 1
+      TimeToLiveSpecification:
+        AttributeName: 'expired_at'
+        Enabled: true
 
   # LambdaVersion:
   #   Type: 'AWS::Lambda::Version'
